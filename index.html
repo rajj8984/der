@@ -6,7 +6,6 @@
     <title>टेक्स्ट टू स्पीच | Text to Speech</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -66,10 +65,6 @@
     </div>
 
     <script>
-        const API_BASE_URL = window.location.hostname === 'localhost' 
-            ? 'http://localhost:5000'
-            : 'https://text-to-speech-api.onrender.com';
-
         async function convertToSpeech() {
             const text = document.getElementById('text').value;
             const audioPlayer = document.getElementById('audioPlayer');
@@ -88,55 +83,16 @@
                 errorDiv.classList.add('hidden');
                 audioPlayer.classList.add('hidden');
 
-                console.log('Sending request to:', `${API_BASE_URL}/api/text-to-speech`);
+                // Create URL for Google Translate TTS
+                const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=hi&client=tw-ob&q=${encodeURIComponent(text)}`;
                 
-                const response = await axios.post(`${API_BASE_URL}/api/text-to-speech`, {
-                    text: text
-                }, {
-                    responseType: 'blob',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'audio/mpeg'
-                    },
-                    validateStatus: function (status) {
-                        return status < 500;
-                    }
-                });
-
-                if (response.status !== 200) {
-                    const reader = new FileReader();
-                    reader.onload = function() {
-                        try {
-                            const errorData = JSON.parse(this.result);
-                            showError(errorData.error || 'Error converting text to speech');
-                        } catch (e) {
-                            showError('Error converting text to speech. Please try again.');
-                        }
-                    };
-                    reader.readAsText(response.data);
-                    return;
-                }
-
-                console.log('Response received:', response);
-                const audioUrl = URL.createObjectURL(response.data);
-                audioPlayer.src = audioUrl;
+                // Play the audio
+                audioPlayer.src = url;
                 audioPlayer.classList.remove('hidden');
-                audioPlayer.play();
+                await audioPlayer.play();
             } catch (error) {
                 console.error('Error:', error);
-                let message = 'Error converting text to speech. Please try again.';
-                
-                if (!navigator.onLine) {
-                    message = 'Please check your internet connection';
-                } else if (error.response) {
-                    if (error.response.status === 429) {
-                        message = 'Server is busy, please try again later';
-                    } else if (error.response.status === 403) {
-                        message = 'Service unavailable';
-                    }
-                }
-                
-                showError(message);
+                showError('Error playing audio. Please try again.');
             } finally {
                 convertButton.disabled = false;
                 statusDiv.classList.add('hidden');
@@ -147,6 +103,9 @@
             const errorDiv = document.getElementById('error');
             errorDiv.textContent = message;
             errorDiv.classList.remove('hidden');
+            setTimeout(() => {
+                errorDiv.classList.add('hidden');
+            }, 5000);
         }
     </script>
 </body>
