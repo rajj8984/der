@@ -6,6 +6,7 @@
     <title>टेक्स्ट टू स्पीच | Text to Speech</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://code.responsivevoice.org/responsivevoice.js?key=YOUR_API_KEY"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -19,6 +20,14 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 1rem;
             padding: 2rem;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
         }
     </style>
 </head>
@@ -42,33 +51,50 @@
                 ></textarea>
             </div>
 
-            <div class="flex justify-center gap-4">
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
                 <button 
-                    onclick="convertToSpeech()" 
-                    class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
-                    id="convertButton"
+                    onclick="speakText()" 
+                    class="btn-gradient text-white px-8 py-3 rounded-lg font-medium"
+                    id="speakButton"
                 >
-                    Convert to Speech
+                    <span class="flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                        </svg>
+                        बोलें | Speak
+                    </span>
+                </button>
+                
+                <button 
+                    onclick="stopSpeaking()" 
+                    class="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-lg font-medium transition-all"
+                    id="stopButton"
+                >
+                    <span class="flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+                        </svg>
+                        रुकें | Stop
+                    </span>
                 </button>
             </div>
 
             <div id="status" class="hidden mt-4 text-center text-gray-600">
-                Converting text to speech...
+                आवाज़ तैयार हो रही है... | Preparing speech...
             </div>
 
-            <div id="error" class="hidden mt-4 text-center text-red-500"></div>
+            <div id="error" class="hidden mt-4 text-center text-red-500 p-3 bg-red-50 rounded-lg"></div>
+        </div>
 
-            <div class="mt-6">
-                <audio id="audioPlayer" class="w-full hidden" controls></audio>
-            </div>
+        <div class="text-center mt-8 text-sm text-gray-300">
+            <p>Powered by ResponsiveVoice</p>
         </div>
     </div>
 
     <script>
-        async function convertToSpeech() {
+        function speakText() {
             const text = document.getElementById('text').value;
-            const audioPlayer = document.getElementById('audioPlayer');
-            const convertButton = document.getElementById('convertButton');
+            const speakButton = document.getElementById('speakButton');
             const statusDiv = document.getElementById('status');
             const errorDiv = document.getElementById('error');
 
@@ -78,25 +104,39 @@
             }
 
             try {
-                convertButton.disabled = true;
+                speakButton.disabled = true;
                 statusDiv.classList.remove('hidden');
                 errorDiv.classList.add('hidden');
-                audioPlayer.classList.add('hidden');
 
-                // Create URL for Google Translate TTS
-                const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=hi&client=tw-ob&q=${encodeURIComponent(text)}`;
-                
-                // Play the audio
-                audioPlayer.src = url;
-                audioPlayer.classList.remove('hidden');
-                await audioPlayer.play();
+                responsiveVoice.speak(text, "Hindi Female", {
+                    onstart: () => {
+                        console.log("Started speaking");
+                        statusDiv.classList.add('hidden');
+                    },
+                    onend: () => {
+                        console.log("Finished speaking");
+                        speakButton.disabled = false;
+                        statusDiv.classList.add('hidden');
+                    },
+                    onerror: (e) => {
+                        console.error("Error speaking:", e);
+                        speakButton.disabled = false;
+                        statusDiv.classList.add('hidden');
+                        showError('आवाज़ चलाने में त्रुटि | Error playing speech');
+                    }
+                });
             } catch (error) {
                 console.error('Error:', error);
-                showError('Error playing audio. Please try again.');
-            } finally {
-                convertButton.disabled = false;
+                speakButton.disabled = false;
                 statusDiv.classList.add('hidden');
+                showError('आवाज़ चलाने में त्रुटि | Error playing speech');
             }
+        }
+
+        function stopSpeaking() {
+            responsiveVoice.cancel();
+            document.getElementById('speakButton').disabled = false;
+            document.getElementById('status').classList.add('hidden');
         }
 
         function showError(message) {
