@@ -28,6 +28,9 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
         }
+        #progress {
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -44,7 +47,7 @@
                 </label>
                 <textarea 
                     id="text" 
-                    rows="5" 
+                    rows="8" 
                     class="w-full px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500"
                     placeholder="यहाँ टाइप करें... | Type here..."
                 ></textarea>
@@ -78,6 +81,12 @@
                 </button>
             </div>
 
+            <div class="mt-4">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress" class="bg-indigo-600 h-2.5 rounded-full w-0"></div>
+                </div>
+            </div>
+
             <div id="status" class="hidden mt-4 text-center text-gray-600">
                 आवाज़ तैयार हो रही है... | Preparing speech...
             </div>
@@ -89,6 +98,9 @@
     <script>
         let speechSynth = window.speechSynthesis;
         let hindiVoice = null;
+        let textChunks = [];
+        let currentChunk = 0;
+        let isSpeaking = false;
 
         // Find Hindi voice when voices are available
         speechSynth.onvoiceschanged = function() {
@@ -114,6 +126,95 @@
             }
         };
 
+        function splitIntoChunks(text, maxLength = 20000000) {
+            // Split by sentences first
+            let sentences = text.match(/[^.!?]+[.!?]+|\s*\n\s*|\s*\d+\.\s+/g) || [text];
+            let chunks = [];
+            let currentChunk = '';
+
+            for (let sentence of sentences) {
+                // If sentence is a newline, start a new chunk
+                if (/^\s*\n\s*$/.test(sentence)) {
+                    if (currentChunk) {
+                        chunks.push(currentChunk.trim());
+                        currentChunk = '';
+                    }
+                    continue;
+                }
+
+                // If adding this sentence would exceed maxLength, start a new chunk
+                if ((currentChunk + sentence).length > maxLength) {
+                    if (currentChunk) {
+                        chunks.push(currentChunk.trim());
+                    }
+                    // If single sentence is longer than maxLength, split it
+                    if (sentence.length > maxLength) {
+                        let words = sentence.split(' ');
+                        currentChunk = '';
+                        for (let word of words) {
+                            if ((currentChunk + ' ' + word).length > maxLength) {
+                                chunks.push(currentChunk.trim());
+                                currentChunk = word;
+                            } else {
+                                currentChunk += (currentChunk ? ' ' : '') + word;
+                            }
+                        }
+                    } else {
+                        currentChunk = sentence;
+                    }
+                } else {
+                    currentChunk += sentence;
+                }
+            }
+
+            if (currentChunk) {
+                chunks.push(currentChunk.trim());
+            }
+
+            return chunks.filter(chunk => chunk.length > 0);
+        }
+
+        function updateProgress() {
+            const progress = document.getElementById('progress');
+            const percentage = (currentChunk / textChunks.length) * 100;
+            progress.style.width = percentage + '%';
+        }
+
+        function speakNextChunk() {
+            if (currentChunk < textChunks.length && isSpeaking) {
+                const utterance = new SpeechSynthesisUtterance(textChunks[currentChunk]);
+                
+                if (hindiVoice) {
+                    utterance.voice = hindiVoice;
+                }
+                utterance.lang = 'hi-IN';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+
+                utterance.onend = function() {
+                    currentChunk++;
+                    updateProgress();
+                    if (currentChunk < textChunks.length && isSpeaking) {
+                        speakNextChunk();
+                    } else {
+                        document.getElementById('speakButton').disabled = false;
+                        document.getElementById('status').classList.add('hidden');
+                        isSpeaking = false;
+                    }
+                };
+
+                utterance.onerror = function(event) {
+                    console.error('Speech error:', event.error);
+                    document.getElementById('speakButton').disabled = false;
+                    document.getElementById('status').classList.add('hidden');
+                    showError('आवाज़ चलाने में त्रुटि | Error playing speech');
+                    isSpeaking = false;
+                };
+
+                speechSynth.speak(utterance);
+            }
+        }
+
         function speakText() {
             const text = document.getElementById('text').value;
             const speakButton = document.getElementById('speakButton');
@@ -133,29 +234,13 @@
                 // Stop any ongoing speech
                 stopSpeaking();
 
-                const utterance = new SpeechSynthesisUtterance(text);
-                
-                // Set Hindi voice and properties
-                if (hindiVoice) {
-                    utterance.voice = hindiVoice;
-                }
-                utterance.lang = 'hi-IN';
-                utterance.rate = 1.0;
-                utterance.pitch = 1.0;
+                // Split text into chunks
+                textChunks = splitIntoChunks(text);
+                currentChunk = 0;
+                isSpeaking = true;
+                updateProgress();
+                speakNextChunk();
 
-                utterance.onend = function() {
-                    speakButton.disabled = false;
-                    statusDiv.classList.add('hidden');
-                };
-
-                utterance.onerror = function(event) {
-                    console.error('Speech error:', event.error);
-                    speakButton.disabled = false;
-                    statusDiv.classList.add('hidden');
-                    showError('आवाज़ चलाने में त्रुटि | Error playing speech');
-                };
-
-                speechSynth.speak(utterance);
             } catch (error) {
                 console.error('Error:', error);
                 speakButton.disabled = false;
@@ -165,11 +250,13 @@
         }
 
         function stopSpeaking() {
+            isSpeaking = false;
             if (speechSynth.speaking) {
                 speechSynth.cancel();
             }
             document.getElementById('speakButton').disabled = false;
             document.getElementById('status').classList.add('hidden');
+            document.getElementById('progress').style.width = '0%';
         }
 
         function showError(message) {
