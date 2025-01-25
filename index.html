@@ -78,12 +78,6 @@
                 </button>
             </div>
 
-            <div class="flex justify-center mt-4">
-                <select id="voiceSelect" class="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500">
-                    <option value="">Loading voices...</option>
-                </select>
-            </div>
-
             <div id="status" class="hidden mt-4 text-center text-gray-600">
                 आवाज़ तैयार हो रही है... | Preparing speech...
             </div>
@@ -94,20 +88,30 @@
 
     <script>
         let speechSynth = window.speechSynthesis;
-        let voices = [];
+        let hindiVoice = null;
 
-        // Load voices when they are available
+        // Find Hindi voice when voices are available
         speechSynth.onvoiceschanged = function() {
-            voices = speechSynth.getVoices();
-            const voiceSelect = document.getElementById('voiceSelect');
-            voiceSelect.innerHTML = '';
-
-            voices.forEach((voice, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                option.innerHTML = `${voice.name} (${voice.lang})`;
-                voiceSelect.appendChild(option);
-            });
+            const voices = speechSynth.getVoices();
+            // Try to find Hindi voice
+            hindiVoice = voices.find(voice => 
+                voice.lang.toLowerCase().includes('hi-in') || 
+                voice.lang.toLowerCase().includes('hi_in') ||
+                voice.name.toLowerCase().includes('hindi')
+            );
+            
+            if (!hindiVoice) {
+                // If no Hindi voice found, try to find any Indian voice
+                hindiVoice = voices.find(voice => 
+                    voice.lang.toLowerCase().includes('in') || 
+                    voice.name.toLowerCase().includes('indian')
+                );
+            }
+            
+            if (!hindiVoice) {
+                // If still no voice found, use the first available voice
+                hindiVoice = voices[0];
+            }
         };
 
         function speakText() {
@@ -115,7 +119,6 @@
             const speakButton = document.getElementById('speakButton');
             const statusDiv = document.getElementById('status');
             const errorDiv = document.getElementById('error');
-            const voiceSelect = document.getElementById('voiceSelect');
 
             if (!text) {
                 showError('कृपया कुछ टेक्स्ट दर्ज करें | Please enter some text');
@@ -132,10 +135,13 @@
 
                 const utterance = new SpeechSynthesisUtterance(text);
                 
-                // Set the selected voice
-                if (voiceSelect.value !== '') {
-                    utterance.voice = voices[voiceSelect.value];
+                // Set Hindi voice and properties
+                if (hindiVoice) {
+                    utterance.voice = hindiVoice;
                 }
+                utterance.lang = 'hi-IN';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
 
                 utterance.onend = function() {
                     speakButton.disabled = false;
