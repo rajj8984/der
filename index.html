@@ -66,7 +66,9 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'https://text-to-speech-api.onrender.com';
+        const API_BASE_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5000'
+            : 'https://text-to-speech-api.onrender.com';
 
         async function convertToSpeech() {
             const text = document.getElementById('text').value;
@@ -86,21 +88,54 @@
                 errorDiv.classList.add('hidden');
                 audioPlayer.classList.add('hidden');
 
+                console.log('Sending request to:', `${API_BASE_URL}/api/text-to-speech`);
+                
                 const response = await axios.post(`${API_BASE_URL}/api/text-to-speech`, {
                     text: text
                 }, {
-                    responseType: 'blob'
+                    responseType: 'blob',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'audio/mpeg'
+                    },
+                    validateStatus: function (status) {
+                        return status < 500;
+                    }
                 });
 
+                if (response.status !== 200) {
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        try {
+                            const errorData = JSON.parse(this.result);
+                            showError(errorData.error || 'Error converting text to speech');
+                        } catch (e) {
+                            showError('Error converting text to speech. Please try again.');
+                        }
+                    };
+                    reader.readAsText(response.data);
+                    return;
+                }
+
+                console.log('Response received:', response);
                 const audioUrl = URL.createObjectURL(response.data);
                 audioPlayer.src = audioUrl;
                 audioPlayer.classList.remove('hidden');
                 audioPlayer.play();
             } catch (error) {
+                console.error('Error:', error);
                 let message = 'Error converting text to speech. Please try again.';
-                if (error.response) {
-                    message = error.response.data.error || message;
+                
+                if (!navigator.onLine) {
+                    message = 'Please check your internet connection';
+                } else if (error.response) {
+                    if (error.response.status === 429) {
+                        message = 'Server is busy, please try again later';
+                    } else if (error.response.status === 403) {
+                        message = 'Service unavailable';
+                    }
                 }
+                
                 showError(message);
             } finally {
                 convertButton.disabled = false;
