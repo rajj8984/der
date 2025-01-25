@@ -6,7 +6,6 @@
     <title>टेक्स्ट टू स्पीच | Text to Speech</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://code.responsivevoice.org/responsivevoice.js?key=YOUR_API_KEY"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -79,24 +78,44 @@
                 </button>
             </div>
 
+            <div class="flex justify-center mt-4">
+                <select id="voiceSelect" class="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Loading voices...</option>
+                </select>
+            </div>
+
             <div id="status" class="hidden mt-4 text-center text-gray-600">
                 आवाज़ तैयार हो रही है... | Preparing speech...
             </div>
 
             <div id="error" class="hidden mt-4 text-center text-red-500 p-3 bg-red-50 rounded-lg"></div>
         </div>
-
-        <div class="text-center mt-8 text-sm text-gray-300">
-            <p>Powered by ResponsiveVoice</p>
-        </div>
     </div>
 
     <script>
+        let speechSynth = window.speechSynthesis;
+        let voices = [];
+
+        // Load voices when they are available
+        speechSynth.onvoiceschanged = function() {
+            voices = speechSynth.getVoices();
+            const voiceSelect = document.getElementById('voiceSelect');
+            voiceSelect.innerHTML = '';
+
+            voices.forEach((voice, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.innerHTML = `${voice.name} (${voice.lang})`;
+                voiceSelect.appendChild(option);
+            });
+        };
+
         function speakText() {
             const text = document.getElementById('text').value;
             const speakButton = document.getElementById('speakButton');
             const statusDiv = document.getElementById('status');
             const errorDiv = document.getElementById('error');
+            const voiceSelect = document.getElementById('voiceSelect');
 
             if (!text) {
                 showError('कृपया कुछ टेक्स्ट दर्ज करें | Please enter some text');
@@ -108,23 +127,29 @@
                 statusDiv.classList.remove('hidden');
                 errorDiv.classList.add('hidden');
 
-                responsiveVoice.speak(text, "Hindi Female", {
-                    onstart: () => {
-                        console.log("Started speaking");
-                        statusDiv.classList.add('hidden');
-                    },
-                    onend: () => {
-                        console.log("Finished speaking");
-                        speakButton.disabled = false;
-                        statusDiv.classList.add('hidden');
-                    },
-                    onerror: (e) => {
-                        console.error("Error speaking:", e);
-                        speakButton.disabled = false;
-                        statusDiv.classList.add('hidden');
-                        showError('आवाज़ चलाने में त्रुटि | Error playing speech');
-                    }
-                });
+                // Stop any ongoing speech
+                stopSpeaking();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                // Set the selected voice
+                if (voiceSelect.value !== '') {
+                    utterance.voice = voices[voiceSelect.value];
+                }
+
+                utterance.onend = function() {
+                    speakButton.disabled = false;
+                    statusDiv.classList.add('hidden');
+                };
+
+                utterance.onerror = function(event) {
+                    console.error('Speech error:', event.error);
+                    speakButton.disabled = false;
+                    statusDiv.classList.add('hidden');
+                    showError('आवाज़ चलाने में त्रुटि | Error playing speech');
+                };
+
+                speechSynth.speak(utterance);
             } catch (error) {
                 console.error('Error:', error);
                 speakButton.disabled = false;
@@ -134,7 +159,9 @@
         }
 
         function stopSpeaking() {
-            responsiveVoice.cancel();
+            if (speechSynth.speaking) {
+                speechSynth.cancel();
+            }
             document.getElementById('speakButton').disabled = false;
             document.getElementById('status').classList.add('hidden');
         }
@@ -146,6 +173,11 @@
             setTimeout(() => {
                 errorDiv.classList.add('hidden');
             }, 5000);
+        }
+
+        // Initialize voices on page load
+        if (speechSynth.onvoiceschanged !== undefined) {
+            speechSynth.onvoiceschanged();
         }
     </script>
 </body>
