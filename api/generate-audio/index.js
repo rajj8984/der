@@ -1,3 +1,5 @@
+const fetch = require('node-fetch');
+
 // Netlify serverless function
 exports.handler = async function(event, context) {
   // Set CORS headers
@@ -33,7 +35,7 @@ exports.handler = async function(event, context) {
       data = event.body;
     }
 
-    const text = data.textToSpeak || data.text;
+    const text = data.text;
 
     if (!text) {
       return {
@@ -43,41 +45,38 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Return HTML that will automatically speak the text
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>TTS</title>
-          <meta charset="utf-8">
-          <script>
-            window.onload = function() {
-              const text = ${JSON.stringify(text)};
-              const utterance = new SpeechSynthesisUtterance(text);
-              utterance.rate = 1.0;
-              utterance.pitch = 1.0;
-              utterance.volume = 1.0;
-              utterance.onend = function() {
-                // Signal that speech is complete
-                window.parent.postMessage('speechComplete', '*');
-              };
-              window.speechSynthesis.speak(utterance);
-            };
-          </script>
-        </head>
-        <body>
-          <div id="text" style="display: none;">${text}</div>
-        </body>
-      </html>
-    `;
+    // Forward the request to Google's TTS API
+    const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': process.env.GOOGLE_API_KEY
+      },
+      body: JSON.stringify({
+        input: { text },
+        voice: {
+          languageCode: 'hi-IN',
+          name: 'hi-IN-Standard-A',
+          ssmlGender: 'FEMALE'
+        },
+        audioConfig: {
+          audioEncoding: 'MP3',
+          pitch: 0,
+          speakingRate: 1
+        }
+      })
+    });
+
+    const audioData = await response.json();
 
     return {
       statusCode: 200,
       headers: {
         ...headers,
-        'Content-Type': 'text/html',
+        'Content-Type': 'audio/mpeg'
       },
-      body: html
+      body: audioData.audioContent,
+      isBase64Encoded: true
     };
   } catch (error) {
     console.error('Error:', error);
