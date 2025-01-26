@@ -1,9 +1,0 @@
-{
-  "name": "tts-service",
-  "version": "1.0.0",
-  "description": "TTS service using ElevenLabs",
-  "main": "index.js",
-  "dependencies": {
-    "node-fetch": "^2.6.1"
-  }
-}
