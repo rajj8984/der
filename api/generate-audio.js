@@ -1,46 +1,66 @@
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+// Netlify serverless function
+exports.handler = async function(event, context) {
+  // Only allow POST requests
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
   }
 
   try {
-    const { text } = req.body;
-    
-    // Create an audio element and use the Web Speech API
-    const audioContext = new (globalThis.AudioContext || globalThis.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const mediaStreamDestination = audioContext.createMediaStreamDestination();
-    
-    // Create a MediaRecorder to capture the audio
-    const mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
-    const audioChunks = [];
+    let data;
+    try {
+      data = JSON.parse(event.body);
+    } catch (e) {
+      data = event.body;
+    }
 
-    mediaRecorder.ondataavailable = (event) => {
-      audioChunks.push(event.data);
+    const text = data.textToSpeak || data.text;
+
+    if (!text) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'No text provided' })
+      };
+    }
+
+    // Return HTML that will automatically speak the text
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>TTS</title>
+          <script>
+            window.onload = function() {
+              const text = ${JSON.stringify(text)};
+              const utterance = new SpeechSynthesisUtterance(text);
+              utterance.onend = function() {
+                // Signal that speech is complete
+                window.parent.postMessage('speechComplete', '*');
+              };
+              window.speechSynthesis.speak(utterance);
+            };
+          </script>
+        </head>
+        <body>
+          <div id="text" style="display: none;">${text}</div>
+        </body>
+      </html>
+    `;
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'text/html',
+      },
+      body: html
     };
-
-    // When recording is complete, send the audio file
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-      res.setHeader('Content-Type', 'audio/mp3');
-      res.send(audioBlob);
-    };
-
-    // Start recording
-    mediaRecorder.start();
-
-    // Use Web Speech API to generate speech
-    const utterance = new SpeechSynthesisUtterance(text);
-    speechSynthesis.speak(utterance);
-
-    // When speech is done, stop recording
-    utterance.onend = () => {
-      mediaRecorder.stop();
-      audioContext.close();
-    };
-
   } catch (error) {
-    console.error('Error generating audio:', error);
-    res.status(500).json({ error: 'Failed to generate audio' });
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Failed to process request' })
+    };
   }
-}
+};
