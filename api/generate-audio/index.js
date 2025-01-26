@@ -1,5 +1,5 @@
+const gtts = require('node-gtts')('en');
 const { Readable } = require('stream');
-const textToSpeech = require('@google-cloud/text-to-speech');
 
 // Netlify serverless function
 exports.handler = async function(event, context) {
@@ -7,7 +7,7 @@ exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, OPTIONS'
   };
 
   // Handle OPTIONS request (preflight)
@@ -19,9 +19,18 @@ exports.handler = async function(event, context) {
     };
   }
 
+  // Only allow GET requests
+  if (event.httpMethod !== 'GET') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
   try {
-    // Get text from query parameter
-    const text = event.queryStringParameters?.text || '';
+    // Get text from query parameters
+    const text = event.queryStringParameters?.text;
 
     if (!text) {
       return {
@@ -31,34 +40,23 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Create gTTS instance
-    const gtts = require('node-gtts')('en');
-    
-    // Convert text to audio buffer
-    const buffer = gtts.stream(text);
-    
-    // Convert buffer to base64
-    let audioData = '';
-    const chunks = [];
-    
-    buffer.on('data', (chunk) => chunks.push(chunk));
-    
-    await new Promise((resolve, reject) => {
-      buffer.on('end', resolve);
-      buffer.on('error', reject);
+    // Generate audio buffer
+    const audioBuffer = await new Promise((resolve, reject) => {
+      gtts.save('temp.mp3', text, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      });
     });
-    
-    const audioBuffer = Buffer.concat(chunks);
-    audioData = audioBuffer.toString('base64');
 
+    // Return audio file
     return {
       statusCode: 200,
       headers: {
         ...headers,
-        'Content-Type': 'audio/mp3',
+        'Content-Type': 'audio/mpeg',
         'Content-Disposition': 'attachment; filename="audio.mp3"'
       },
-      body: audioData,
+      body: audioBuffer.toString('base64'),
       isBase64Encoded: true
     };
 
