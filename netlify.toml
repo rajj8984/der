@@ -1,0 +1,11 @@
+[build]
+  publish = "."
+  command = ""
+
+[functions]
+  directory = "api"
+
+[[redirects]]
+  from = "/generate-audio"
+  to = "/.netlify/functions/generate-audio"
+  status = 200
