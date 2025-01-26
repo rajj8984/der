@@ -1,9 +1,26 @@
 // Netlify serverless function
 exports.handler = async function(event, context) {
+  // Set CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+  };
+
+  // Handle OPTIONS request (preflight)
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    };
+  }
+
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers,
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
@@ -21,6 +38,7 @@ exports.handler = async function(event, context) {
     if (!text) {
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ error: 'No text provided' })
       };
     }
@@ -31,10 +49,14 @@ exports.handler = async function(event, context) {
       <html>
         <head>
           <title>TTS</title>
+          <meta charset="utf-8">
           <script>
             window.onload = function() {
               const text = ${JSON.stringify(text)};
               const utterance = new SpeechSynthesisUtterance(text);
+              utterance.rate = 1.0;
+              utterance.pitch = 1.0;
+              utterance.volume = 1.0;
               utterance.onend = function() {
                 // Signal that speech is complete
                 window.parent.postMessage('speechComplete', '*');
@@ -52,6 +74,7 @@ exports.handler = async function(event, context) {
     return {
       statusCode: 200,
       headers: {
+        ...headers,
         'Content-Type': 'text/html',
       },
       body: html
@@ -60,6 +83,7 @@ exports.handler = async function(event, context) {
     console.error('Error:', error);
     return {
       statusCode: 500,
+      headers,
       body: JSON.stringify({ error: 'Failed to process request' })
     };
   }
