@@ -1,0 +1,10 @@
+{
+  "name": "tts-service",
+  "version": "1.0.0",
+  "description": "TTS service using Google TTS",
+  "main": "index.js",
+  "dependencies": {
+    "node-fetch": "^2.6.1",
+    "node-gtts": "^2.0.2"
+  }
+}
