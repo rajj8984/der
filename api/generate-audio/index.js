@@ -1,4 +1,5 @@
-const fetch = require('node-fetch');
+const { Readable } = require('stream');
+const textToSpeech = require('@google-cloud/text-to-speech');
 
 // Netlify serverless function
 exports.handler = async function(event, context) {
@@ -6,7 +7,7 @@ exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   };
 
   // Handle OPTIONS request (preflight)
@@ -18,24 +19,9 @@ exports.handler = async function(event, context) {
     };
   }
 
-  // Only allow POST requests
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
-
   try {
-    let data;
-    try {
-      data = JSON.parse(event.body);
-    } catch (e) {
-      data = event.body;
-    }
-
-    const text = data.text;
+    // Get text from query parameter
+    const text = event.queryStringParameters?.text || '';
 
     if (!text) {
       return {
@@ -45,45 +31,43 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Forward the request to Google's TTS API
-    const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': process.env.GOOGLE_API_KEY
-      },
-      body: JSON.stringify({
-        input: { text },
-        voice: {
-          languageCode: 'hi-IN',
-          name: 'hi-IN-Standard-A',
-          ssmlGender: 'FEMALE'
-        },
-        audioConfig: {
-          audioEncoding: 'MP3',
-          pitch: 0,
-          speakingRate: 1
-        }
-      })
+    // Create gTTS instance
+    const gtts = require('node-gtts')('en');
+    
+    // Convert text to audio buffer
+    const buffer = gtts.stream(text);
+    
+    // Convert buffer to base64
+    let audioData = '';
+    const chunks = [];
+    
+    buffer.on('data', (chunk) => chunks.push(chunk));
+    
+    await new Promise((resolve, reject) => {
+      buffer.on('end', resolve);
+      buffer.on('error', reject);
     });
-
-    const audioData = await response.json();
+    
+    const audioBuffer = Buffer.concat(chunks);
+    audioData = audioBuffer.toString('base64');
 
     return {
       statusCode: 200,
       headers: {
         ...headers,
-        'Content-Type': 'audio/mpeg'
+        'Content-Type': 'audio/mp3',
+        'Content-Disposition': 'attachment; filename="audio.mp3"'
       },
-      body: audioData.audioContent,
+      body: audioData,
       isBase64Encoded: true
     };
+
   } catch (error) {
     console.error('Error:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to process request' })
+      body: JSON.stringify({ error: 'Failed to generate audio' })
     };
   }
 };
