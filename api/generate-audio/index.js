@@ -1,13 +1,11 @@
-const gtts = require('node-gtts')('en');
-const { Readable } = require('stream');
+const fetch = require('node-fetch');
 
-// Netlify serverless function
 exports.handler = async function(event, context) {
   // Set CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   };
 
   // Handle OPTIONS request (preflight)
@@ -19,18 +17,15 @@ exports.handler = async function(event, context) {
     };
   }
 
-  // Only allow GET requests
-  if (event.httpMethod !== 'GET') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
-
   try {
-    // Get text from query parameters
-    const text = event.queryStringParameters?.text;
+    // Get text from query parameters or body
+    let text;
+    if (event.httpMethod === 'GET') {
+      text = event.queryStringParameters?.text;
+    } else {
+      const body = JSON.parse(event.body);
+      text = body.text;
+    }
 
     if (!text) {
       return {
@@ -40,15 +35,29 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Generate audio buffer
-    const audioBuffer = await new Promise((resolve, reject) => {
-      gtts.save('temp.mp3', text, (err, result) => {
-        if (err) reject(err);
-        else resolve(result);
-      });
+    // ElevenLabs API request
+    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': process.env.ELEVENLABS_API_KEY
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5
+        }
+      })
     });
 
-    // Return audio file
+    if (!response.ok) {
+      throw new Error(`ElevenLabs API error: ${response.statusText}`);
+    }
+
+    const audioBuffer = await response.buffer();
+
     return {
       statusCode: 200,
       headers: {
@@ -65,7 +74,7 @@ exports.handler = async function(event, context) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to generate audio' })
+      body: JSON.stringify({ error: 'Failed to generate audio', details: error.message })
     };
   }
 };
