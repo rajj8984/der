@@ -1,11 +1,9 @@
 [build]
   publish = "."
+  functions = "api"
   command = ""
 
-[functions]
-  directory = "api"
-
 [[redirects]]
-  from = "/generate-audio"
-  to = "/.netlify/functions/generate-audio"
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
   status = 200
